@@ -26,14 +26,14 @@ def collect_cn(batch):
     seq_lens = torch.LongTensor([len(text) for text in texts]).to(device)
     label_ids = torch.LongTensor([label2id[label] for label in labels]).to(device)
 
-    return token_ids, seq_lens, label_ids
+    return token_ids, seq_lens, label_ids, texts, labels
 
 
 def metric(valid_loader, model):
     correct_num, predict_num, gold_num = 0, 0, 0
     with tqdm(total=len(valid_loader), desc='模型验证进度条') as pbar:
         for index, batch in enumerate(valid_loader):
-            token_ids, seq_lens, gold_labels = batch
+            token_ids, seq_lens, gold_labels, _, _ = batch
             pred_labels = model(token_ids, seq_lens)
             pred_labels = torch.argmax(pred_labels, dim=1)
             predict_num += len(pred_labels)
@@ -64,7 +64,7 @@ def train():
         model.train()
         with tqdm(total=len(train_loader), desc='模型训练进度条') as pbar:
             for batch_idx, batch in enumerate(train_loader):
-                input_ids, seq_lens, labels = batch
+                input_ids, seq_lens, labels, _, _ = batch
                 optimizer.zero_grad()
                 logits = model(input_ids, seq_lens)
                 loss = torch.nn.CrossEntropyLoss()(logits, labels)
@@ -86,6 +86,16 @@ def train():
                 print('验证集f1_score连续三个epoch没有提升，训练结束')
                 break
         print('\n')
+
+
+def test():
+    model = BilistmSoftmax(tokenizer.vocab_size, embedding_size=200, hidden_size=200, num_layers=1,
+                           num_classes=len(label2id))
+    model.load_state_dict(torch.load(args.model_path))
+    with torch.no_grad():
+        test_dataset = CNewsDataset(os.path.join(args.file_path, 'tmp.csv'))
+        test_loader = data.DataLoader(test_dataset, batch_size=200, collate_fn=collect_cn)
+        metric(test_loader, model)
 
 
 if __name__ == '__main__':
@@ -114,4 +124,5 @@ if __name__ == '__main__':
         for line in f:
             vocab2id[line.strip()] = len(vocab2id)
             id2vocab[len(id2vocab)] = line.strip()
-    train()
+    # train()
+    test()
