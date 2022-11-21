@@ -49,14 +49,16 @@ def metric(valid_loader, model):
 def train():
     train_dataset = CNewsDataset(os.path.join(args.file_path, 'train.csv'))
     dev_dataset = CNewsDataset(os.path.join(args.file_path, 'dev.csv'))
-    train_loader = data.DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=collect_cn)
-    valid_loader = data.DataLoader(dev_dataset, batch_size=8, collate_fn=collect_cn)
+    train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collect_cn)
+    valid_loader = data.DataLoader(dev_dataset, batch_size=args.batch_size, collate_fn=collect_cn)
 
     bert_model = BertModel.from_pretrained(args.bert_model_path)
     model = BertSoftmax(encoder=bert_model, num_classes=len(label2id)).to(device)
-    optimizer = AdamW(model.parameters(), lr=2e-5, correct_bias=False)
-    total_steps = len(train_loader) * args.epochs
-    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=0, num_training_steps=total_steps)
+    optimizer = AdamW(model.parameters(), lr=args.lr, correct_bias=False)
+    total_steps = len(train_loader) // args.batch_size * args.epochs
+    total_steps = total_steps if len(train_loader) % args.batch_size == 0 else total_steps + 1
+    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warm_up_ratio * total_steps,
+                                                num_training_steps=total_steps)
     best_f1_score = 0.0
     early_epochs = 0
     for epoch in range(args.epochs):
@@ -94,11 +96,12 @@ if __name__ == '__main__':
     parser.add_argument('--bert_model_path', help='预训练模型路径', type=str, default='/tmp/chinese-roberta-wwm-ext')
     parser.add_argument('--epochs', help='训练轮数', type=int, default=1)
     parser.add_argument('--dropout', help='', type=float, default=0.5)
+    parser.add_argument('--warm_up_ratio', help='', type=float, default=0.1)
     parser.add_argument('--embedding_size', help='', type=int, default=100)
-    parser.add_argument('--batch_size', help='', type=int, default=100)
+    parser.add_argument('--batch_size', help='', type=int, default=32)
     parser.add_argument('--hidden_size', help='', type=int, default=200)
     parser.add_argument('--num_layers', help='', type=int, default=1)
-    parser.add_argument('--lr', help='学习率', type=float, default=1e-3)
+    parser.add_argument('--lr', help='学习率', type=float, default=2e-5)
     parser.add_argument('--mode', help='长文本处理方式', type=str, default='cut')
     parser.add_argument('--model_path', help='模型存储路径', type=str, default='/tmp/cnews_cls.pt')
     args = parser.parse_args()
